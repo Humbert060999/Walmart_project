@@ -1,9 +1,16 @@
+ipykernel
+jupyter
 loguru
+matplotlib
 mkdocs
+numpy
+pandas
 pip
 pytest
 python-dotenv
 ruff
+scikit-learn
+seaborn
 tqdm
 typer
 -e .

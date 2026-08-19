@@ -1,29 +1,26 @@
-from pathlib import Path
+import pandas as pd
+import os
 
-from loguru import logger
-from tqdm import tqdm
-import typer
+class WalmartDataLoader:
+    def __init__(self, ruta_carpeta="data/raw/"):
+        self.ruta = ruta_carpeta
 
-from walmart_sales_forecast.config import PROCESSED_DATA_DIR, RAW_DATA_DIR
+    def obtener_tabla_limpia(self):
+        """Carga, limpia y fusiona train, features y stores en una sola tabla minable."""
+        train = pd.read_csv(os.path.join(self.ruta, 'train.csv'))
+        features = pd.read_csv(os.path.join(self.ruta, 'features.csv'))
+        stores = pd.read_csv(os.path.join(self.ruta, 'stores.csv'))
 
-app = typer.Typer()
+        # Unir tablas
+        df = train.merge(features, on=['Store', 'Date', 'IsHoliday'], how='left')
+        df = df.merge(stores, on='Store', how='left')
 
+        # Limpieza universal de nulos
+        markdown_cols = [f'MarkDown{i}' for i in range(1, 6)]
+        df[markdown_cols] = df[markdown_cols].fillna(0)
+        df = df.dropna()
 
-@app.command()
-def main(
-    # ---- REPLACE DEFAULT PATHS AS APPROPRIATE ----
-    input_path: Path = RAW_DATA_DIR / "dataset.csv",
-    output_path: Path = PROCESSED_DATA_DIR / "dataset.csv",
-    # ----------------------------------------------
-):
-    # ---- REPLACE THIS WITH YOUR OWN CODE ----
-    logger.info("Processing dataset...")
-    for i in tqdm(range(10), total=10):
-        if i == 5:
-            logger.info("Something happened for iteration 5.")
-    logger.success("Processing dataset complete.")
-    # -----------------------------------------
-
-
-if __name__ == "__main__":
-    app()
+        # Formato de fecha
+        df['Date'] = pd.to_datetime(df['Date'])
+        
+        return df

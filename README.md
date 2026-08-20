@@ -1,3 +1,12 @@
+# Equipo Nro 5 
+Integrantes:
+- Copa Lopez Edgar Fausto
+- Lucana Mamani Humberto
+- Peredo Gonzales Edgar
+- Quispe Choque Michelle 
+- Soto Choque Paola Aleida 
+
+
 # Walmart Sales Forecast
 
 <a target="_blank" href="https://cookiecutter-data-science.drivendata.org/">

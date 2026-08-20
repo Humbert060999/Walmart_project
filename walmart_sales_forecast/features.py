@@ -1,29 +1,99 @@
-from pathlib import Path
+"""
+UBICACIÓN: walmart_forecast/features.py
+(ccds ya te crea este archivo; reemplaza su contenido)
 
-from loguru import logger
-from tqdm import tqdm
-import typer
+Contiene la clase Preprocesador: limpieza + creación de variables +
+escalado. Es la misma clase "Preprocesador" del diagrama.
+"""
 
-from walmart_sales_forecast.config import PROCESSED_DATA_DIR
+import pandas as pd
+from sklearn.preprocessing import StandardScaler
 
-app = typer.Typer()
-
-
-@app.command()
-def main(
-    # ---- REPLACE DEFAULT PATHS AS APPROPRIATE ----
-    input_path: Path = PROCESSED_DATA_DIR / "dataset.csv",
-    output_path: Path = PROCESSED_DATA_DIR / "features.csv",
-    # -----------------------------------------
-):
-    # ---- REPLACE THIS WITH YOUR OWN CODE ----
-    logger.info("Generating features from dataset...")
-    for i in tqdm(range(10), total=10):
-        if i == 5:
-            logger.info("Something happened for iteration 5.")
-    logger.success("Features generation complete.")
-    # -----------------------------------------
+from walmart_sales_forecast.config import config
 
 
-if __name__ == "__main__":
-    app()
+class Preprocesador:
+    """
+    Limpia el DataFrame combinado y crea las variables necesarias
+    para modelar (fecha, semana feriada, lags, codificación, escalado).
+    """
+
+    def __init__(self):
+        self.scaler = StandardScaler()
+        self.columnas_numericas = ["Temperature", "Fuel_Price", "CPI", "Unemployment", "Size"]
+
+    # --- Limpieza ---
+    def tratar_valores_nulos(self, df: pd.DataFrame) -> pd.DataFrame:
+        df = df.copy()
+        # Los MarkDown vienen como NA cuando no hubo promoción -> 0 tiene sentido
+        columnas_markdown = [c for c in df.columns if "MarkDown" in c]
+        df[columnas_markdown] = df[columnas_markdown].fillna(0)
+        # CPI/Unemployment: relleno hacia adelante por tienda (siguen tendencia)
+        df[["CPI", "Unemployment"]] = df.groupby("Store")[["CPI", "Unemployment"]].transform(
+            lambda serie: serie.ffill().bfill()
+        )
+        return df
+
+    def tratar_outliers(self, df: pd.DataFrame, columna: str = "Weekly_Sales") -> pd.DataFrame:
+        df = df.copy()
+        if columna not in df.columns:
+            return df
+        q1, q3 = df[columna].quantile([0.01, 0.99])
+        df[columna] = df[columna].clip(lower=q1, upper=q3)
+        return df
+
+    # --- Feature engineering ---
+    def extraer_variables_fecha(self, df: pd.DataFrame) -> pd.DataFrame:
+        df = df.copy()
+        df["Anio"] = df["Date"].dt.year
+        df["Mes"] = df["Date"].dt.month
+        df["Semana"] = df["Date"].dt.isocalendar().week.astype(int)
+        return df
+
+    def crear_variable_semana_festiva(self, df: pd.DataFrame) -> pd.DataFrame:
+        df = df.copy()
+        df["Peso_WMAE"] = df["IsHoliday"].apply(
+            lambda es_feriado: config.obtener("peso_semana_feriado")
+            if es_feriado else config.obtener("peso_semana_normal")
+        )
+        return df
+
+    def crear_variables_lag(self, df: pd.DataFrame, n_periodos: int = 1) -> pd.DataFrame:
+        df = df.copy()
+        df = df.sort_values(["Store", "Dept", "Date"])
+        df[f"Ventas_Lag_{n_periodos}"] = df.groupby(["Store", "Dept"])["Weekly_Sales"].shift(n_periodos)
+        return df
+
+    def codificar_categoricas(self, df: pd.DataFrame) -> pd.DataFrame:
+        df = df.copy()
+        df["IsHoliday"] = df["IsHoliday"].astype(int)
+        df = pd.get_dummies(df, columns=["Type"], prefix="TipoTienda")
+        return df
+
+    def escalar_numericas(self, df: pd.DataFrame, ajustar: bool = True) -> pd.DataFrame:
+        df = df.copy()
+        columnas_presentes = [c for c in self.columnas_numericas if c in df.columns]
+        if ajustar:
+            df[columnas_presentes] = self.scaler.fit_transform(df[columnas_presentes])
+        else:
+            df[columnas_presentes] = self.scaler.transform(df[columnas_presentes])
+        return df
+
+    def dividir_train_val(self, df: pd.DataFrame, pct_validacion: float = 0.2):
+        """División temporal (no aleatoria): las últimas semanas van a validación."""
+        df = df.sort_values("Date")
+        punto_corte = int(len(df) * (1 - pct_validacion))
+        return df.iloc[:punto_corte], df.iloc[punto_corte:]
+
+    # --- Método orquestador ---
+    def preprocesar(self, df: pd.DataFrame, ajustar_scaler: bool = True) -> pd.DataFrame:
+        df = self.tratar_valores_nulos(df)
+        if "Weekly_Sales" in df.columns:
+            df = self.tratar_outliers(df)
+        df = self.extraer_variables_fecha(df)
+        df = self.crear_variable_semana_festiva(df)
+        if "Weekly_Sales" in df.columns:
+            df = self.crear_variables_lag(df)
+        df = self.codificar_categoricas(df)
+        df = self.escalar_numericas(df, ajustar=ajustar_scaler)
+        return df

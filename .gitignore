@@ -3,6 +3,10 @@
 data/interim/*.csv
 data/processed/*.csv
 
+# MLflow: base de datos local y artefactos de las corridas -- no se versionan.
+mlflow.db
+mlruns/
+
 # Mac OS-specific storage files
 .DS_Store
 

@@ -10,10 +10,11 @@ punto de entrada. Es la misma clase "Pipeline" del diagrama.
 import pandas as pd
 
 from walmart_sales_forecast.config import config
-from walmart_sales_forecast.dataset import DataLoader, DataIntegrador
+from walmart_sales_forecast.dataset import DataIntegrador, DataLoader
 from walmart_sales_forecast.features import Preprocesador
 from walmart_sales_forecast.metrics import Evaluador
-from walmart_sales_forecast.modeling.models import ModeloRandomForest, ModeloARIMA
+from walmart_sales_forecast.modeling.models import ModeloARIMA, ModeloRandomForest
+from walmart_sales_forecast.tracking import MLflowRegistryManager, MLflowTracker
 
 
 class Pipeline:
@@ -25,6 +26,8 @@ class Pipeline:
         self.preprocesador = Preprocesador()
         self.evaluador = Evaluador()
         self.config = config
+        self.tracker = MLflowTracker(experimentName="Walmart_Sales_Forecast")
+        self.registryMgr = MLflowRegistryManager()
 
     def preparar_datos(self) -> pd.DataFrame:
         train = self.cargador.cargar_train()
@@ -54,15 +57,27 @@ class Pipeline:
         wmae = self.evaluador.calcular_wmae(y_val, predicciones, pesos_val)
         return modelo, wmae
 
-    def comparar_modelos(self):
+    def comparar_modelos(self, registrarEnMlflow: bool = True):
         resultados = []
 
-        modelo_rf = ModeloRandomForest(
-            n_estimadores=self.config.obtener("n_estimadores_rf"),
-            profundidad_maxima=self.config.obtener("profundidad_maxima_rf"),
-        )
-        _, wmae_rf = self.entrenar_y_evaluar(modelo_rf)
+        # --- Random Forest ---
+        params_rf = {
+            "n_estimadores": self.config.obtener("n_estimadores_rf"),
+            "profundidad_maxima": self.config.obtener("profundidad_maxima_rf"),
+        }
+        modelo_rf = ModeloRandomForest(**params_rf)
+        modelo_rf, wmae_rf = self.entrenar_y_evaluar(modelo_rf)
         resultados.append(("RandomForest", wmae_rf))
+
+        if registrarEnMlflow:
+            self.tracker.loguearCorrida(
+                modelo=modelo_rf,
+                params=params_rf,
+                metricas={"wmae": wmae_rf},
+                nombreCorrida="RandomForest",
+                tipoModelo="sklearn",
+                registrarComo="Walmart_RandomForest",
+            )
 
         # ARIMA se evalúa distinto (serie temporal por Store-Dept);
         # aquí un ejemplo simplificado con una sola serie agregada.
@@ -71,7 +86,8 @@ class Pipeline:
         train_serie = serie_agregada.iloc[:-10]
         val_serie = serie_agregada.iloc[-10:]
 
-        modelo_arima = ModeloARIMA(orden_pdq=self.config.obtener("orden_arima"))
+        orden_arima = self.config.obtener("orden_arima")
+        modelo_arima = ModeloARIMA(orden_pdq=orden_arima)
         modelo_arima.entrenar(X=None, y=train_serie)
         pred_arima = modelo_arima.predecir(val_serie)
         pesos_arima = [1] * len(val_serie)  # simplificado; usa Peso_WMAE real si lo tienes por fecha
@@ -79,7 +95,33 @@ class Pipeline:
         wmae_arima = self.evaluador.calcular_wmae(val_serie.values, pred_arima, pesos_arima)
         resultados.append(("ARIMA", wmae_arima))
 
-        return self.evaluador.comparar_modelos(resultados)
+        if registrarEnMlflow:
+            self.tracker.loguearCorrida(
+                modelo=modelo_arima,
+                params={"orden_pdq": str(orden_arima)},
+                metricas={"wmae": wmae_arima},
+                nombreCorrida="ARIMA",
+                tipoModelo="statsmodels",
+                registrarComo="Walmart_ARIMA",
+            )
+
+        tabla = self.evaluador.comparar_modelos(resultados)
+
+        if registrarEnMlflow:
+            self._promoverGanador(tabla)
+
+        return tabla
+
+    def _promoverGanador(self, tabla) -> None:
+        """Marca con el alias 'produccion' la version del modelo con menor WMAE."""
+        nombreGanador = tabla.iloc[0]["Modelo"]
+        nombreRegistrado = {
+            "RandomForest": "Walmart_RandomForest",
+            "ARIMA": "Walmart_ARIMA",
+        }[nombreGanador]
+
+        version = self.registryMgr.obtenerUltimaVersion(nombreRegistrado)
+        self.registryMgr.promoverModelo(nombreRegistrado, version, alias="produccion")
 
 
 if __name__ == "__main__":

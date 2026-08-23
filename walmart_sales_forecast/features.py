@@ -23,7 +23,7 @@ class Preprocesador:
         self.columnas_numericas = ["Temperature", "Fuel_Price", "CPI", "Unemployment", "Size"]
 
     # --- Limpieza ---
-    def tratar_valores_nulos(self, df: pd.DataFrame) -> pd.DataFrame:
+    def tratarValoresNulos(self, df: pd.DataFrame) -> pd.DataFrame:
         df = df.copy()
         # Los MarkDown vienen como NA cuando no hubo promoción -> 0 tiene sentido
         columnas_markdown = [c for c in df.columns if "MarkDown" in c]
@@ -34,7 +34,7 @@ class Preprocesador:
         )
         return df
 
-    def tratar_outliers(self, df: pd.DataFrame, columna: str = "Weekly_Sales") -> pd.DataFrame:
+    def tratarOutliers(self, df: pd.DataFrame, columna: str = "Weekly_Sales") -> pd.DataFrame:
         df = df.copy()
         if columna not in df.columns:
             return df
@@ -43,14 +43,14 @@ class Preprocesador:
         return df
 
     # --- Feature engineering ---
-    def extraer_variables_fecha(self, df: pd.DataFrame) -> pd.DataFrame:
+    def extraerVariablesFecha(self, df: pd.DataFrame) -> pd.DataFrame:
         df = df.copy()
         df["Anio"] = df["Date"].dt.year
         df["Mes"] = df["Date"].dt.month
         df["Semana"] = df["Date"].dt.isocalendar().week.astype(int)
         return df
 
-    def crear_variable_semana_festiva(self, df: pd.DataFrame) -> pd.DataFrame:
+    def crearVariableSemanaFestiva(self, df: pd.DataFrame) -> pd.DataFrame:
         df = df.copy()
         df["Peso_WMAE"] = df["IsHoliday"].apply(
             lambda es_feriado: config.obtener("peso_semana_feriado")
@@ -58,7 +58,7 @@ class Preprocesador:
         )
         return df
 
-    def crear_variables_lag(self, df: pd.DataFrame, n_periodos: int = 1) -> pd.DataFrame:
+    def crearVariablesLag(self, df: pd.DataFrame, n_periodos: int = 1) -> pd.DataFrame:
         df = df.copy()
         df = df.sort_values(["Store", "Dept", "Date"])
         df[f"Ventas_Lag_{n_periodos}"] = df.groupby(["Store", "Dept"])["Weekly_Sales"].shift(n_periodos)
@@ -87,13 +87,13 @@ class Preprocesador:
 
     # --- Método orquestador ---
     def preprocesar(self, df: pd.DataFrame, ajustar_scaler: bool = True) -> pd.DataFrame:
-        df = self.tratar_valores_nulos(df)
+        df = self.tratarValoresNulos(df)
         if "Weekly_Sales" in df.columns:
-            df = self.tratar_outliers(df)
-        df = self.extraer_variables_fecha(df)
-        df = self.crear_variable_semana_festiva(df)
+            df = self.tratarOutliers(df)
+        df = self.extraerVariablesFecha(df)
+        df = self.crearVariableSemanaFestiva(df)
         if "Weekly_Sales" in df.columns:
-            df = self.crear_variables_lag(df)
+            df = self.crearVariablesLag(df)
         df = self.codificar_categoricas(df)
         df = self.escalar_numericas(df, ajustar=ajustar_scaler)
         return df

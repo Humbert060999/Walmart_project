@@ -1,4 +1,3 @@
-
 """
 UBICACIÓN: walmart_sales_forecast/pipeline.py
 
@@ -25,6 +24,8 @@ Flujo Random Forest:
     predicción
       ↓
     WMAE
+      ↓
+    logueo en MLflow (params, metricas, modelo)
 
 Flujo ARIMA:
 
@@ -41,6 +42,12 @@ Flujo ARIMA:
     Peso_WMAE real por fecha
       ↓
     WMAE
+      ↓
+    logueo en MLflow (params, metricas, modelo)
+
+Al final de comparar_modelos(), el modelo con menor WMAE se
+promueve automáticamente al alias 'produccion' en el Model Registry
+de MLflow.
 """
 
 import pandas as pd
@@ -64,6 +71,18 @@ from walmart_sales_forecast.plots import (
     plot_comparacion_wmae,
 )
 
+from walmart_sales_forecast.tracking import (
+    MLflowTracker,
+    MLflowRegistryManager,
+)
+
+# Nombres con los que cada modelo queda registrado en el Model Registry
+NOMBRES_REGISTRO_MLFLOW = {
+    "RandomForest": "Walmart_RandomForest",
+    "ARIMA": "Walmart_ARIMA",
+}
+
+
 class Pipeline:
     """
     Orquesta todo el flujo del proyecto.
@@ -75,6 +94,8 @@ class Pipeline:
         self.preprocesador = Preprocesador()
         self.evaluador = Evaluador()
         self.config = config
+        self.tracker = MLflowTracker(experimentName="Walmart_Sales_Forecast")
+        self.registryMgr = MLflowRegistryManager()
 
     # =========================================================
     # CARGA E INTEGRACIÓN
@@ -482,10 +503,12 @@ class Pipeline:
         # Entrenar ARIMA
         # -----------------------------------------------------
 
+        orden_arima = self.config.obtener(
+            "orden_arima"
+        )
+
         modelo_arima = ModeloARIMA(
-            orden_pdq=self.config.obtener(
-                "orden_arima"
-            )
+            orden_pdq=orden_arima
         )
 
         modelo_arima.entrenar(
@@ -523,19 +546,60 @@ class Pipeline:
         )
 
     # =========================================================
+    # MLFLOW: LOGUEO POR MODELO
+    # =========================================================
+
+    def _loguearRandomForest(self, modeloRf, wmaeRf: float) -> None:
+        paramsRf = {
+            "n_estimadores": self.config.obtener("n_estimadores_rf"),
+            "profundidad_maxima": self.config.obtener("profundidad_maxima_rf"),
+        }
+        self.tracker.loguearCorrida(
+            modelo=modeloRf,
+            params=paramsRf,
+            metricas={"wmae": wmaeRf},
+            nombreCorrida="RandomForest",
+            tipoModelo="sklearn",
+            registrarComo=NOMBRES_REGISTRO_MLFLOW["RandomForest"],
+        )
+
+    def _loguearArima(self, modeloArima, wmaeArima: float) -> None:
+        ordenArima = self.config.obtener("orden_arima")
+        self.tracker.loguearCorrida(
+            modelo=modeloArima,
+            params={"orden_pdq": str(ordenArima)},
+            metricas={"wmae": wmaeArima},
+            nombreCorrida="ARIMA",
+            tipoModelo="statsmodels",
+            registrarComo=NOMBRES_REGISTRO_MLFLOW["ARIMA"],
+        )
+
+    def _promoverGanador(self, tabla) -> None:
+        """Marca con el alias 'produccion' la version del modelo con menor WMAE."""
+        nombreGanador = tabla.iloc[0]["Modelo"]
+        nombreRegistrado = NOMBRES_REGISTRO_MLFLOW[nombreGanador]
+
+        version = self.registryMgr.obtenerUltimaVersion(nombreRegistrado)
+        self.registryMgr.promoverModelo(nombreRegistrado, version, alias="produccion")
+
+    # =========================================================
     # COMPARACIÓN DE MODELOS
     # =========================================================
 
-    
     def comparar_modelos(
         self,
         generar_graficos: bool = True,
+        registrarEnMlflow: bool = True,
     ):
         """
         Compara Random Forest y ARIMA utilizando WMAE.
 
         Si generar_graficos=True, genera las visualizaciones
         correspondientes en reports/figures/.
+
+        Si registrarEnMlflow=True, loguea cada corrida en MLflow y
+        promueve automáticamente al alias 'produccion' el modelo
+        con menor WMAE.
         """
 
         resultados = []
@@ -569,6 +633,9 @@ class Pipeline:
             )
         )
 
+        if registrarEnMlflow:
+            self._loguearRandomForest(modelo_rf, wmae_rf)
+
     # =====================================================
     # ARIMA
     # =====================================================
@@ -587,6 +654,9 @@ class Pipeline:
             )
         )
 
+        if registrarEnMlflow:
+            self._loguearArima(modelo_arima, wmae_arima)
+
     # =====================================================
     # TABLA DE RESULTADOS
     # =====================================================
@@ -596,6 +666,9 @@ class Pipeline:
                 resultados
             )
         )
+
+        if registrarEnMlflow:
+            self._promoverGanador(tabla_comparacion)
 
     # =====================================================
     # VISUALIZACIONES
@@ -624,7 +697,7 @@ class Pipeline:
                 ],
                 predicciones=pred_rf,
                 nombre_modelo="RandomForest",
-            )   
+            )
 
         # -------------------------------------------------
         # ARIMA

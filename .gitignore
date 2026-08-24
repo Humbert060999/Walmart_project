@@ -1,7 +1,12 @@
+
+# Data
+# /data/
+=======
 # Data: los archivos pesados de data/raw/ los versiona DVC, no Git.
 # DVC gestiona su propio .gitignore dentro de esas carpetas al hacer `dvc add`.
 data/interim/*.csv
 data/processed/*.csv
+
 
 # Mac OS-specific storage files
 .DS_Store

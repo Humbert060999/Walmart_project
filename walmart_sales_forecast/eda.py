@@ -10,12 +10,7 @@ class AnalisisExploratorio:
     # 1) DUPLICADOS Y VALIDACIÓN DE FORMATO
 
     def detectarDuplicados(self, df: pd.DataFrame, columnasClave: list = None) -> pd.DataFrame:
-        """
-        Busca filas duplicadas. Si le pasas columnasClave (ej.
-        ["Store", "Dept", "Date"]), busca duplicados según SOLO esas
-        columnas; si no, compara la fila completa.
-        Devuelve el subconjunto de filas duplicadas encontradas.
-        """
+        
         if columnasClave:
             mascara = df.duplicated(subset=columnasClave, keep=False)
         else:
@@ -27,10 +22,7 @@ class AnalisisExploratorio:
         return duplicados
 
     def eliminarDuplicados(self, df: pd.DataFrame, columnasClave: list = None) -> pd.DataFrame:
-        """
-        Elimina duplicados y devuelve un DataFrame limpio (se
-        conserva la primera aparición de cada fila repetida).
-        """
+        
         filasAntes = len(df)
         if columnasClave:
             dfLimpio = df.drop_duplicates(subset=columnasClave, keep="first")
@@ -109,7 +101,7 @@ class AnalisisExploratorio:
     # 3) GRÁFICOS
 
     def graficarDistribucionVentas(self, df: pd.DataFrame) -> None:
-        """Histograma de Weekly_Sales — para ver el sesgo/outliers."""
+        """Histograma de Weekly_Sales para ver el sesgo/outliers."""
         plt.figure(figsize=(8, 5))
         sns.histplot(df["Weekly_Sales"].dropna(), kde=True, bins=60)
         plt.title("Distribución de Weekly_Sales")

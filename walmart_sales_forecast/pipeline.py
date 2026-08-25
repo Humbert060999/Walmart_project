@@ -50,9 +50,10 @@ promueve automáticamente al alias 'produccion' en el Model Registry
 de MLflow.
 """
 
+import joblib
 import pandas as pd
 
-from walmart_sales_forecast.config import config
+from walmart_sales_forecast.config import MODELS_DIR, config
 from walmart_sales_forecast.dataset import (
     DataLoader,
     DataIntegrador,
@@ -582,6 +583,13 @@ class Pipeline:
         version = self.registryMgr.obtenerUltimaVersion(nombreRegistrado)
         self.registryMgr.promoverModelo(nombreRegistrado, version, alias="produccion")
 
+    def _guardarModelosEnDisco(self, modeloRf, modeloArima) -> None:
+        # Copia en models/ (para DVC); la API en produccion lee de MLflow,
+        MODELS_DIR.mkdir(parents=True, exist_ok=True)
+        modeloRf.guardar_modelo(MODELS_DIR / "modelo_random_forest.pkl")
+        modeloArima.guardar_modelo(MODELS_DIR / "modelo_arima.pkl")
+        joblib.dump(self.preprocesador.scaler, MODELS_DIR / "scaler.pkl")
+
     # =========================================================
     # COMPARACIÓN DE MODELOS
     # =========================================================
@@ -669,6 +677,8 @@ class Pipeline:
 
         if registrarEnMlflow:
             self._promoverGanador(tabla_comparacion)
+
+        self._guardarModelosEnDisco(modelo_rf, modelo_arima)
 
     # =====================================================
     # VISUALIZACIONES

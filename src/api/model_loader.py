@@ -1,3 +1,4 @@
+import os
 import sys
 from pathlib import Path
 
@@ -15,14 +16,22 @@ MODEL_NAME = "Walmart_RandomForest"
 ALIAS_PRODUCCION = "produccion"
 TRACKING_URI = "sqlite:///mlflow.db"
 
-# mlflow.sklearn.load_model() usa esta URI global
-mlflow.set_tracking_uri(TRACKING_URI)
+# el Model Registry.
+IS_DOCKER = os.environ.get("ENVIRONMENT") == "docker"
 
-_registryMgr = MLflowRegistryManager(trackingUri=TRACKING_URI)
+if not IS_DOCKER:
+    # mlflow.sklearn.load_model() usa esta URI global
+    mlflow.set_tracking_uri(TRACKING_URI)
+    _registryMgr = MLflowRegistryManager(trackingUri=TRACKING_URI)
 
 
 def cargarModelo():
-    """Trae el modelo con el alias 'produccion' (el ganador por WMAE)."""
+    """Trae el modelo en 'produccion': del Registry en local, del .pkl en Docker."""
+    if IS_DOCKER:
+        try:
+            return joblib.load(MODELS_DIR / "modelo_random_forest.pkl")
+        except Exception:  # noqa: BLE001
+            return None
     try:
         return _registryMgr.cargarModeloPorAlias(
             MODEL_NAME, alias=ALIAS_PRODUCCION, tipoModelo="sklearn"
@@ -32,7 +41,9 @@ def cargarModelo():
 
 
 def obtenerMetadataModelo() -> dict:
-    """Version y run_id del modelo actual en 'produccion', para trazabilidad."""
+    """Version y run_id del modelo actual, para trazabilidad."""
+    if IS_DOCKER:
+        return {"version": "docker-pkl", "run_id": "n/a"}
     try:
         mv = _registryMgr.client.get_model_version_by_alias(MODEL_NAME, ALIAS_PRODUCCION)
         return {"version": str(mv.version), "run_id": mv.run_id}
@@ -41,7 +52,7 @@ def obtenerMetadataModelo() -> dict:
 
 
 def obtenerPreprocesadorEntrenado() -> Preprocesador:
-    """Carga el scaler ya ajustado en entrenamiento (no se reajusta aqui)."""
+    """Carga el scaler ya ajustado en entrenamiento"""
     preprocesador = Preprocesador()
     preprocesador.scaler = joblib.load(MODELS_DIR / "scaler.pkl")
     return preprocesador

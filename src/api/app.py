@@ -35,17 +35,17 @@ def eventoInicio():
 
 
 class VentaEntrada(BaseModel):
-    tienda: int
-    departamento: int
-    fecha: str = Field(..., description="YYYY-MM-DD")
-    temperatura: float
-    precio_combustible: float
-    cpi: float
-    desempleo: float
-    tipo_tienda: str
-    tamano: int
-    es_feriado: bool
-    ventas_semana_anterior: float
+    tienda: int = Field(..., examples=[5])
+    departamento: int = Field(..., examples=[12])
+    fecha: str = Field(..., examples=["2013-03-15"])
+    temperatura: float = Field(..., examples=[45.3])
+    precio_combustible: float = Field(..., examples=[3.6])
+    cpi: float = Field(..., examples=[220.5])
+    desempleo: float = Field(..., examples=[7.2])
+    tipo_tienda: str = Field(..., examples=["A"])
+    tamano: int = Field(..., examples=[151315])
+    es_feriado: bool = Field(..., examples=[False])
+    ventas_semana_anterior: float = Field(..., examples=[23000.50])
 
 
 class PrediccionRequest(BaseModel):

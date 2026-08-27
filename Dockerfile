@@ -15,7 +15,8 @@ RUN apt-get update && apt-get install -y \
 COPY . /app
 
 # Instalamos las dependencias despues de tener el codigo en el contenedor
-RUN pip install --no-cache-dir -r requirements.txt
+RUN --mount=type=cache,target=/root/.cache/pip \
+    pip install -r requirements.txt
 
 # Exponer el puerto en el que corre FastAPI
 EXPOSE 8000

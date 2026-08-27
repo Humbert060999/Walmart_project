@@ -7,6 +7,13 @@ data/processed/*.csv
 mlflow.db
 mlruns/
 
+# Reports: graficos generados por el EDA y el entrenamiento -- son
+# regenerables corriendo el codigo, no se versionan como binarios en Git.
+reports/*.png
+reports/figures/*.png
+!reports/.gitkeep
+!reports/figures/.gitkeep
+
 # Mac OS-specific storage files
 .DS_Store
 

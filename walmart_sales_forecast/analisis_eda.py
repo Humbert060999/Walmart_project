@@ -1,16 +1,20 @@
 
+import os
+
 import matplotlib.pyplot as plt
 import pandas as pd
 import seaborn as sns
 
 
 class AnalisisExploratorio:
-    
+
+    def __init__(self, directorio_salida: str = "reports"):
+        self.directorioSalida = directorio_salida
 
     # 1) DUPLICADOS Y VALIDACIÓN DE FORMATO
 
-    def detectarDuplicados(self, df: pd.DataFrame, columnasClave: list = None) -> pd.DataFrame:
-        
+    def detectarDuplicados(self, df: pd.DataFrame, columnasClave: list | None = None) -> pd.DataFrame:
+
         if columnasClave:
             mascara = df.duplicated(subset=columnasClave, keep=False)
         else:
@@ -21,8 +25,8 @@ class AnalisisExploratorio:
               f"({len(duplicados) / len(df) * 100:.2f}%)")
         return duplicados
 
-    def eliminarDuplicados(self, df: pd.DataFrame, columnasClave: list = None) -> pd.DataFrame:
-        
+    def eliminarDuplicados(self, df: pd.DataFrame, columnasClave: list | None = None) -> pd.DataFrame:
+
         filasAntes = len(df)
         if columnasClave:
             dfLimpio = df.drop_duplicates(subset=columnasClave, keep="first")
@@ -35,7 +39,7 @@ class AnalisisExploratorio:
         return dfLimpio
 
     def validarFormato(self, df: pd.DataFrame, tiposEsperados: dict) -> bool:
-       
+
         todoCorrecto = True
         for columna, tipoEsperado in tiposEsperados.items():
             if columna not in df.columns:
@@ -100,16 +104,27 @@ class AnalisisExploratorio:
 
     # 3) GRÁFICOS
 
-    def graficarDistribucionVentas(self, df: pd.DataFrame) -> None:
+    def _mostrarOGuardar(self, nombreArchivo: str, guardar: bool) -> None:
+        """Si guardar=True, escribe el PNG en directorioSalida; si no, plt.show()."""
+        if guardar:
+            os.makedirs(self.directorioSalida, exist_ok=True)
+            rutaArchivo = os.path.join(self.directorioSalida, nombreArchivo)
+            plt.savefig(rutaArchivo, dpi=300)
+            plt.close()
+            print(f"[EDA] Gráfico guardado en: {rutaArchivo}")
+        else:
+            plt.show()
+
+    def graficarDistribucionVentas(self, df: pd.DataFrame, guardar: bool = False) -> None:
         """Histograma de Weekly_Sales para ver el sesgo/outliers."""
         plt.figure(figsize=(8, 5))
         sns.histplot(df["Weekly_Sales"].dropna(), kde=True, bins=60)
         plt.title("Distribución de Weekly_Sales")
         plt.xlabel("Weekly_Sales")
         plt.tight_layout()
-        plt.show()
+        self._mostrarOGuardar("distribucion_weekly_sales.png", guardar)
 
-    def graficarVentasPorFeriado(self, df: pd.DataFrame) -> None:
+    def graficarVentasPorFeriado(self, df: pd.DataFrame, guardar: bool = False) -> None:
         """Boxplot: Weekly_Sales según IsHoliday (True/False)."""
         plt.figure(figsize=(7, 5))
         sns.boxplot(data=df, x="IsHoliday", y="Weekly_Sales")
@@ -117,9 +132,9 @@ class AnalisisExploratorio:
         plt.xlabel("¿Es semana feriado?")
         plt.ylabel("Weekly_Sales")
         plt.tight_layout()
-        plt.show()
+        self._mostrarOGuardar("ventas_por_feriado.png", guardar)
 
-    def graficarVentasPorTipoTienda(self, df: pd.DataFrame) -> None:
+    def graficarVentasPorTipoTienda(self, df: pd.DataFrame, guardar: bool = False) -> None:
         """Boxplot: Weekly_Sales según Type (A/B/C)."""
         plt.figure(figsize=(7, 5))
         sns.boxplot(data=df, x="Type", y="Weekly_Sales", order=["A", "B", "C"])
@@ -127,9 +142,9 @@ class AnalisisExploratorio:
         plt.xlabel("Tipo de tienda")
         plt.ylabel("Weekly_Sales")
         plt.tight_layout()
-        plt.show()
+        self._mostrarOGuardar("ventas_por_tipo_tienda.png", guardar)
 
-    def graficarEstacionalidad(self, df: pd.DataFrame) -> None:
+    def graficarEstacionalidad(self, df: pd.DataFrame, guardar: bool = False) -> None:
         """Línea de tiempo: ventas totales agrupadas por semana."""
         ventasPorSemana = df.groupby("Date")["Weekly_Sales"].sum().sort_index()
         plt.figure(figsize=(14, 5))
@@ -138,9 +153,9 @@ class AnalisisExploratorio:
         plt.xlabel("Fecha")
         plt.ylabel("Ventas totales")
         plt.tight_layout()
-        plt.show()
+        self._mostrarOGuardar("tendencia_ventas_tiempo.png", guardar)
 
-    def graficarCorrelacion(self, df: pd.DataFrame) -> None:
+    def graficarCorrelacion(self, df: pd.DataFrame, guardar: bool = False) -> None:
         """Heatmap: correlación entre variables numéricas y Weekly_Sales."""
         columnasNumericas = df.select_dtypes(include="number").columns
         matrizCorrelacion = df[columnasNumericas].corr()
@@ -149,4 +164,4 @@ class AnalisisExploratorio:
         sns.heatmap(matrizCorrelacion, annot=True, fmt=".2f", cmap="coolwarm", center=0)
         plt.title("Matriz de correlación (dataset combinado)")
         plt.tight_layout()
-        plt.show()
+        self._mostrarOGuardar("matriz_correlacion.png", guardar)

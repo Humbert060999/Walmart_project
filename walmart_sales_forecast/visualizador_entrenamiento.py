@@ -16,14 +16,13 @@ import matplotlib
 
 matplotlib.use("Agg")
 
+from loguru import logger
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
-from loguru import logger
 
 from walmart_sales_forecast.config import FIGURES_DIR
 from walmart_sales_forecast.modeling.models import ModeloARIMA, ModeloRandomForest
-from walmart_sales_forecast.pipeline import Pipeline
 
 COLOR_PRIMARIO = "#0f766e"
 COLOR_SECUNDARIO = "#d97706"
@@ -80,7 +79,7 @@ class VisualizadorEntrenamiento:
 
         nombre_archivo = f"real_vs_predicho_{nombre_modelo.lower()}.{FORMATO_FIGURAS}"
 
-        ruta_salida = self.directorio_salida / f"real_vs_predicho_{nombre_modelo.lower()}.png"
+        ruta_salida = self.directorio_salida / nombre_archivo
         plt.savefig(ruta_salida, dpi=300, bbox_inches="tight")
         plt.close()
 
@@ -146,7 +145,7 @@ class VisualizadorEntrenamiento:
         y_pred = np.asarray(y_pred, dtype=float)
         residuos = y_real - y_pred
 
-        figura, (eje_dispersion, eje_histograma) = plt.subplots(1, 2, figsize=(12, 5))
+        _figura, (eje_dispersion, eje_histograma) = plt.subplots(1, 2, figsize=(12, 5))
 
         eje_dispersion.scatter(
             y_pred,
@@ -290,12 +289,17 @@ class VisualizadorEntrenamiento:
 
 def main() -> None:
     """Entrena los modelos y genera todas las figuras del reporte."""
+    from walmart_sales_forecast.pipeline import (
+        Pipeline,  # import diferido: evita ciclo con pipeline.py
+    )
+
     pipeline = Pipeline()
     visualizador = VisualizadorEntrenamiento()
 
     modelo_rf = ModeloRandomForest(
         n_estimadores=pipeline.config.obtener("n_estimadores_rf"),
         profundidad_maxima=pipeline.config.obtener("profundidad_maxima_rf"),
+        semilla_aleatoria=pipeline.config.obtener("semilla_aleatoria"),
     )
     modelo_rf, wmae_rf, val_rf, pred_rf = pipeline.entrenar_y_evaluar(modelo_rf)
 

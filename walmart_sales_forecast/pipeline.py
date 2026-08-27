@@ -55,26 +55,21 @@ import pandas as pd
 
 from walmart_sales_forecast.config import MODELS_DIR, config
 from walmart_sales_forecast.dataset import (
-    DataLoader,
     DataIntegrador,
+    DataLoader,
 )
-
 from walmart_sales_forecast.features import Preprocesador
 from walmart_sales_forecast.metrics import Evaluador
 from walmart_sales_forecast.modeling.models import (
-    ModeloRandomForest,
     ModeloARIMA,
+    ModeloRandomForest,
 )
-
-from walmart_sales_forecast.plots import (
-    plot_ventas_temporales,
-    plot_real_vs_predicho,
-    plot_comparacion_wmae,
-)
-
 from walmart_sales_forecast.tracking import (
-    MLflowTracker,
     MLflowRegistryManager,
+    MLflowTracker,
+)
+from walmart_sales_forecast.visualizador_entrenamiento import (
+    VisualizadorEntrenamiento,
 )
 
 # Nombres con los que cada modelo queda registrado en el Model Registry
@@ -97,6 +92,7 @@ class Pipeline:
         self.config = config
         self.tracker = MLflowTracker(experimentName="Walmart_Sales_Forecast")
         self.registryMgr = MLflowRegistryManager()
+        self.visualizador = VisualizadorEntrenamiento()
 
     # =========================================================
     # CARGA E INTEGRACIÓN
@@ -554,6 +550,7 @@ class Pipeline:
         paramsRf = {
             "n_estimadores": self.config.obtener("n_estimadores_rf"),
             "profundidad_maxima": self.config.obtener("profundidad_maxima_rf"),
+            "semilla_aleatoria": self.config.obtener("semilla_aleatoria"),
         }
         self.tracker.loguearCorrida(
             modelo=modeloRf,
@@ -565,10 +562,10 @@ class Pipeline:
         )
 
     def _loguearArima(self, modeloArima, wmaeArima: float) -> None:
-        ordenArima = self.config.obtener("orden_arima")
+        p, d, q = self.config.obtener("orden_arima")
         self.tracker.loguearCorrida(
             modelo=modeloArima,
-            params={"orden_pdq": str(ordenArima)},
+            params={"p": p, "d": d, "q": q},
             metricas={"wmae": wmaeArima},
             nombreCorrida="ARIMA",
             tipoModelo="statsmodels",
@@ -622,6 +619,9 @@ class Pipeline:
             ),
             profundidad_maxima=self.config.obtener(
                 "profundidad_maxima_rf"
+            ),
+            semilla_aleatoria=self.config.obtener(
+                "semilla_aleatoria"
             ),
         )
 
@@ -687,45 +687,28 @@ class Pipeline:
         if generar_graficos:
 
         # -------------------------------------------------
-        # Ventas históricas
+        # Reporte completo (real vs. predicho, residuos,
+        # importancia de variables, error por feriado,
+        # diagnóstico de ARIMA y comparación WMAE)
         # -------------------------------------------------
 
-            dataset = self.cargar_datos()
+            resultadosRandomForest = {
+                "y_real": val_rf["Weekly_Sales"],
+                "y_pred": pred_rf,
+                "es_feriado": val_rf["IsHoliday"],
+            }
 
-            plot_ventas_temporales(
-                dataset
-            )
+            resultadosArima = {
+                "y_real": val_arima.values,
+                "y_pred": pred_arima,
+            }
 
-        # -------------------------------------------------
-        # Random Forest
-        # -------------------------------------------------
-
-            plot_real_vs_predicho(
-                fechas=val_rf["Date"],
-                valores_reales=val_rf[
-                    "Weekly_Sales"
-                ],
-                predicciones=pred_rf,
-                nombre_modelo="RandomForest",
-            )
-
-        # -------------------------------------------------
-        # ARIMA
-        # -------------------------------------------------
-
-            plot_real_vs_predicho(
-                fechas=val_arima.index,
-                valores_reales=val_arima.values,
-                predicciones=pred_arima,
-                nombre_modelo="ARIMA",
-            )
-
-        # -------------------------------------------------
-        # Comparación WMAE
-        # -------------------------------------------------
-
-            plot_comparacion_wmae(
-                tabla_comparacion
+            self.visualizador.generar_reporte_completo(
+                resultadosRandomForest,
+                resultadosArima,
+                tabla_comparacion,
+                modelo_rf,
+                modelo_arima,
             )
 
         return tabla_comparacion

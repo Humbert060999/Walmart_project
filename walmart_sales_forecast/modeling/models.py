@@ -10,6 +10,7 @@ que estos dos.
 """
 
 from abc import ABC, abstractmethod
+
 import joblib
 import pandas as pd
 from sklearn.ensemble import RandomForestRegressor

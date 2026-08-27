@@ -4,6 +4,7 @@
 # instalar este archivo, correr: pip uninstall pyopenssl -y
 dvc[gdrive]==3.67.1
 fastapi==0.141.1
+httpx==0.28.1
 joblib==1.5.3
 loguru==0.7.3
 mkdocs==1.6.1

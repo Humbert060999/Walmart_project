@@ -10,11 +10,11 @@ del diagrama de clases.
 import pandas as pd
 
 from walmart_sales_forecast.config import (
-    RUTA_TRAIN,
-    RUTA_TEST,
+    RUTA_DATASET_COMBINADO,
     RUTA_FEATURES,
     RUTA_STORES,
-    RUTA_DATASET_COMBINADO,
+    RUTA_TEST,
+    RUTA_TRAIN,
 )
 
 

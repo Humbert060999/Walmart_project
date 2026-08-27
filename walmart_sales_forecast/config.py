@@ -6,7 +6,6 @@ Configuración general del proyecto Walmart.
 
 from pathlib import Path
 
-
 # =============================================================
 # RAÍZ DEL PROYECTO
 # =============================================================
